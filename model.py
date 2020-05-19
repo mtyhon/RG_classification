@@ -94,6 +94,79 @@ class Bayes_Classifier(nn.Module):
         return logits, kl
 
 
+class Simple_OneD_Stack(nn.Module):
+    def __init__(self, kernel_size, feature_maps, padding):
+        super(Simple_OneD_Stack, self).__init__()
+        self.kernel_size = kernel_size
+        self.feature_maps = feature_maps
+        self.padding = padding
+
+        self.conv1 = nn.Conv1d(1, self.feature_maps ** 1, kernel_size=self.kernel_size,
+                               padding=self.padding)  # same padding 2P = K-1
+        self.pool1 = nn.MaxPool1d(2, 2)
+
+        self.conv2 = nn.Conv1d(self.feature_maps ** 1, self.feature_maps ** 2, kernel_size=self.kernel_size,
+                               padding=self.padding)
+        self.pool2 = nn.MaxPool1d(2, 2)
+
+        self.conv3 = nn.Conv1d(self.feature_maps ** 2, self.feature_maps ** 3, kernel_size=self.kernel_size,
+                               padding=self.padding)
+        self.pool3 = nn.MaxPool1d(2, 2)
+        self.flatten = FlattenLayer(250 * 8)
+
+        layers = [self.conv1, self.pool1, self.conv2, self.pool2, self.conv3,self.pool3, self.flatten]
+
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+
+class Simple_Linear_Layers(nn.Module):
+    def __init__(self):
+        super(Simple_Linear_Layers, self).__init__()
+        self.fc1 = nn.Linear(4000, 512)
+        self.soft1 = nn.ReLU()
+        self.fc2 = nn.Linear(512, 64)
+        self.soft2 = nn.ReLU()
+        self.fc3 = nn.Linear(64, 2)
+
+    def forward(self, x, input_dnu):
+        x= self.fc1(x)
+        x = self.soft1(x)
+        x = self.fc2(x)
+        x = self.soft2(x)
+        x = torch.add(x, input_dnu.view(-1, 1))
+        x= self.fc3(x)
+
+        return x
+
+class Simple_Classifier(nn.Module):
+
+    def __init__(self):
+        super(Simple_Classifier, self).__init__()
+        self.conv_stack1 = Simple_OneD_Stack(kernel_size=31, feature_maps=2, padding=15)
+        self.conv_stack2 = Simple_OneD_Stack(kernel_size=31, feature_maps=2, padding=15)
+        self.linear = Simple_Linear_Layers()
+        layers = [self.conv_stack1, self.conv_stack2, self.linear]
+
+        self.layers = nn.ModuleList(layers)
+
+    def forward(self, x, input_dnu):  # (N,Cin,L)
+        x = x.unsqueeze(1)
+
+        stack1 = self.conv_stack1(x)
+        stack2 = self.conv_stack2(x)
+        concat = torch.cat((stack1.view(x.size()[0], -1), stack2.view(x.size()[0], -1)), 1)
+        logits = self.linear(concat, input_dnu)
+        return logits
+
+    def get_embedding(self, x):
+        return self.forward(x)
+
+
 def get_beta(m, beta_type='standard', batch_idx=None):  # m is the number of minibatches
     if beta_type == "Blundell":  
         ### Weight Uncertainty in Neural Networks, Blundell et al. (2015), Section 3.4 pg 5:

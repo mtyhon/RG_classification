@@ -128,8 +128,6 @@ def train_model(config):
     print('Using device:', device)
 
     model = Bayes_Classifier()
-   
-
     model.to(device)
     
     folder_kic = []
@@ -143,23 +141,12 @@ def train_model(config):
     train_kics, val_kics = train_test_split(folder_kic, test_size=config.holdout_frac, random_state=137)
     print('Number of Train Stars: ', len(train_kics))
     print('Number of Validation Stars: ', len(val_kics))
-    train_gen = npz_generator(root=root_folder, select_kic=train_kics, obs_len=356*4)
+    train_gen = npz_generator(root=root_folder, select_kic=train_kics, obs_len=config.obs_len)
     train_dataloader = utils.DataLoader(train_gen, shuffle=True, batch_size=32)
 
-    val_gen = npz_generator(root=root_folder, select_kic=val_kics, obs_len=356*4)
+    val_gen = npz_generator(root=root_folder, select_kic=val_kics, obs_len=config.obs_len)
     val_dataloader = utils.DataLoader(val_gen, shuffle=False, batch_size=32)
 
-    jie_data = pd.read_csv('JieData_Full2018.txt', delimiter='|', header=0)
-    jie_kic = jie_data['KICID'].values
-    jie_dnu = jie_data['dnu'].values
-
-    label_data = pd.read_csv('Elsworth_Jie_2019_ID_Label.dat', header=0, delim_whitespace=True)
-    label_kic = label_data['KIC'].values
-    label_truth = label_data['Label'].values
-    train_label = np.array([label_truth[np.where(label_kic == kicz)][0] for kicz in train_kics])
-    val_label = np.array([label_truth[np.where(label_kic == kicz)][0] for kicz in val_kics])
-    train_dnu = np.array([jie_dnu[np.where(jie_kic == kicz)][0] for kicz in train_kics])
-    val_dnu = np.array([jie_dnu[np.where(jie_kic == kicz)][0] for kicz in val_kics])
 
     learning_rate = config.init_lr
     model_optimizer = optim.Adam(model.parameters(), lr=learning_rate)
